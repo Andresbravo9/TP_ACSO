@@ -15,14 +15,14 @@ int main(int argc, char **argv) {
 
     int n = atoi(argv[1]);  // número de procesos
     int c = atoi(argv[2]);  // valor inicial
-    int s = atoi(argv[3]);  // proceso que inicia (1 a n)
+    int s = atoi(argv[3]);  // proceso que inicia (0 a n-1)
 
     if (n <= 0) {
         printf("Error: el número de procesos debe ser positivo\n");
         exit(1);
     }
-    if (s < 1 || s > n) {
-        printf("Error: el proceso inicial debe estar entre 1 y n\n");
+    if (s < 0 || s >= n) {
+        printf("Error: el proceso inicial debe estar entre 0 y n-1\n");
         exit(1);
     }
 
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
         
         if (pids[i] == 0) { // Proceso hijo
             int my_child_idx = i;
-            int my_process_num = my_child_idx + 1; // Número de proceso (1 a n)
+            int my_process_num = my_child_idx; // Número de proceso (0 a n-1)
 
             int read_from_fd;
             int write_to_fd;
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
                 read_from_fd = ring_pipes[prev_child_idx][0];
             }
 
-            int process_s_minus_1 = (s == 1) ? n : (s - 1);
+            int process_s_minus_1 = (s == 0) ? (n - 1) : (s - 1);
             if (my_process_num == process_s_minus_1) {
                 write_to_fd = end_pipe[1];
             } else {
@@ -102,7 +102,15 @@ int main(int argc, char **argv) {
             }
             close(read_from_fd); // Cerrar después de leer
 
-            valor++; // Todos los procesos incrementan el valor
+            // Si es el proceso inicial y recibe el valor inicial del padre
+            if (my_process_num == s && valor == c) {
+                printf("Proceso %d: Enviando valor inicial %d\n", my_process_num, valor + 1);
+                valor++; // El proceso inicial también incrementa el valor
+            } else {
+                printf("Proceso %d: Recibido %d, enviando %d\n", my_process_num, valor, valor + 1);
+                valor++; // Todos los procesos incrementan el valor
+            }
+            fflush(stdout);
 
             if (write(write_to_fd, &valor, sizeof(int)) == -1) {
                 perror("Hijo: Error escribiendo en el pipe");
@@ -140,7 +148,7 @@ int main(int argc, char **argv) {
     }
     close(end_pipe[0]); // Cerrar después de leer
 
-    printf("Valor final recibido: %d\n", resultado);
+    printf("Valor final después de dar la vuelta al anillo %d\n", resultado);
 
     // Esperar a que terminen todos los hijos
     for (int i = 0; i < n; i++) {
