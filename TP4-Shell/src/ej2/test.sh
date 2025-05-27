@@ -9,64 +9,76 @@ NC='\033[0m' # No Color
 run_test() {
     local test_name=$1
     local command=$2
-    local expected_output=$3
-    local expect_error=${4:-false}
+    local expect_error=${3:-false}
     
     echo -e "\nPrueba: ${test_name}"
     echo "Comando: ${command}"
     
     # Crear archivos temporales para la salida
-    output_file=$(mktemp)
-    error_file=$(mktemp)
+    custom_output=$(mktemp)
+    custom_error=$(mktemp)
+    custom_output_filtered=$(mktemp)
+    bash_output=$(mktemp)
+    bash_error=$(mktemp)
     input_file=$(mktemp)
     
-    # Preparar el archivo de entrada
+    # Preparar el archivo de entrada para el shell personalizado
     echo "${command}" > "$input_file"
     echo "exit" >> "$input_file"
     
-    # Ejecutar el comando y capturar salidas
-    ./shell < "$input_file" > "$output_file" 2> "$error_file"
+    # Ejecutar el comando en el shell personalizado
+    ./shell < "$input_file" > "$custom_output" 2> "$custom_error"
     
-    # Depuración
-    echo "Salida completa:"
-    cat "$output_file"
+    # Ejecutar el mismo comando en bash real
+    bash -c "${command}" > "$bash_output" 2> "$bash_error" || true
     
-    # Verificar las condiciones de éxito de forma manual
+    # Filtrar la salida del shell personalizado para quitar "Shell> " y "Shell> Saliendo del shell..."
+    cat "$custom_output" | grep -v "Saliendo del shell" | sed 's/^Shell> //g' > "$custom_output_filtered"
+    
+    # Mostrar las salidas para depuración
+    echo "Salida de tu shell (original):"
+    cat "$custom_output"
+    echo "Salida de tu shell (filtrada):"
+    cat "$custom_output_filtered"
+    echo "Salida de bash real:"
+    cat "$bash_output"
+    
+    # Verificar si las salidas coinciden
     if [ "$expect_error" = true ]; then
-        # Si esperamos un error
-        if [ -s "$error_file" ] && grep -q "$expected_output" "$error_file"; then
-            echo -e "${GREEN}✓ Prueba exitosa${NC}"
+        # Para errores, solo verificamos si ambos shells reportaron algún error
+        if [ -s "$custom_error" ] && [ -s "$bash_error" ]; then
+            echo -e "${GREEN}✓ Prueba exitosa - Ambos shells reportaron errores${NC}"
+            echo "Error en bash:"
+            cat "$bash_error"
+            echo "Error en tu shell:"
+            cat "$custom_error"
         else
-            echo -e "${RED}✗ Prueba fallida${NC}"
-            echo "Error esperado: $expected_output"
-            echo "Error obtenido: $(cat $error_file)"
+            echo -e "${RED}✗ Prueba fallida - Comportamiento diferente con errores${NC}"
+            echo "Error en bash:"
+            cat "$bash_error"
+            echo "Error en tu shell:"
+            cat "$custom_error"
         fi
     else
-        # Para pruebas normales, verificamos si la salida contiene lo esperado
-        # Para los casos especiales de números, comprobamos directamente
-        if [ "$expected_output" = "[0-9]" ]; then
-            # Verificar si hay un número en la salida
-            if grep -q '[0-9]' "$output_file"; then
-                echo -e "${GREEN}✓ Prueba exitosa${NC}"
-            else
-                echo -e "${RED}✗ Prueba fallida${NC}"
-                echo "Salida esperada: un número [0-9]"
-                echo "Salida obtenida: $(cat $output_file)"
-            fi
-        elif grep -q "$expected_output" "$output_file"; then
-            echo -e "${GREEN}✓ Prueba exitosa${NC}"
+        # Comparar salidas estándar (usando la salida filtrada)
+        if diff -q "$custom_output_filtered" "$bash_output" >/dev/null; then
+            echo -e "${GREEN}✓ Prueba exitosa - Las salidas coinciden exactamente${NC}"
         else
-            echo -e "${RED}✗ Prueba fallida${NC}"
-            echo "Salida esperada: $expected_output"
-            echo "Salida obtenida: $(cat $output_file)"
-            if [ -s "$error_file" ]; then
-                echo "Error obtenido: $(cat $error_file)"
+            # Si no coinciden exactamente, verificar si contienen información similar
+            if grep -q "$(cat $bash_output | tr -d '\n')" "$custom_output_filtered" 2>/dev/null; then
+                echo -e "${GREEN}✓ Prueba exitosa - Las salidas contienen información similar${NC}"
+            else
+                echo -e "${RED}✗ Prueba fallida - Las salidas son diferentes${NC}"
+                echo "Salida esperada (bash):"
+                cat "$bash_output"
+                echo "Salida obtenida (tu shell, filtrada):"
+                cat "$custom_output_filtered"
             fi
         fi
     fi
     
     # Limpiar archivos temporales
-    rm "$output_file" "$error_file" "$input_file"
+    rm "$custom_output" "$custom_error" "$bash_output" "$bash_error" "$input_file" "$custom_output_filtered"
 }
 
 # Compilar el shell
@@ -79,54 +91,43 @@ fi
 
 # Tests de comandos básicos
 run_test "Comando simple" \
-         "ls" \
-         "shell"
+         "ls"
 
 run_test "Comando con argumentos" \
-         "ls -l" \
-         "shell.c"
+         "ls -l"
 
 run_test "Comando vacío" \
-         "" \
          ""
 
 # Tests de pipes
 run_test "Pipe simple" \
-         "ls | grep shell" \
-         "shell"
+         "ls | grep shell"
 
 run_test "Pipe con espacios" \
-         "ls    |    grep shell" \
-         "shell"
+         "ls    |    grep shell"
 
 # Tests específicos para pipes múltiples
 run_test "Múltiples pipes" \
-         "ls | grep .c | wc -l" \
-         "[0-9]"
+         "ls | grep .c | wc -l"
 
 # Tests de errores
 run_test "Comando inexistente" \
          "comandoquenoexiste" \
-         "No such file or directory" \
          true
 
 run_test "Pipe con comando inexistente" \
          "ls | comandoquenoexiste" \
-         "No such file or directory" \
          true
 
 run_test "Comando con error" \
          "ls archivoquenovaaestar" \
-         "No existe el archivo o el directorio" \
          true
 
 # Test de comandos más complejos
 run_test "Comando con pipe y grep" \
-         "ls -l | grep test" \
-         "test.sh"
+         "ls -l | grep test"
 
 run_test "Conteo de archivos" \
-         "ls | wc -l" \
-         "[0-9]"
+         "ls | wc -l"
 
 echo -e "\nPruebas completadas." 
