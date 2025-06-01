@@ -44,10 +44,8 @@ test_invalid_args() {
     echo -e "\nPrueba: ${test_name}"
     echo "Argumentos: $args"
     
-    # Ejecutar el programa y capturar la salida de error
     actual_output=$(./ring $args 2>&1)
     
-    # Verificar si la salida contiene el mensaje de error esperado
     if echo "$actual_output" | grep -q "$expected_error"; then
         echo -e "${GREEN}✓ Prueba exitosa${NC}"
     else

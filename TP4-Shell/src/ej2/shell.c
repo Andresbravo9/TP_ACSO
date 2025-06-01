@@ -74,13 +74,12 @@ void parse_command(char *original_command_input_str, char **args, int child_idx_
                 redirection->append_output = 1;
             }
         } else if (!redirect_in && !redirect_out) {
-            // Si no hemos encontrado redirecciones aún, añadir como argumento
             args[i++] = strdup(token);
         }
         
         // Si ya estamos en modo redirección, solo procesamos los operadores y sus argumentos
         if (redirect_in || redirect_out) {
-            redirect_in = redirect_out = 0;  // Resetear para el siguiente token
+            redirect_in = redirect_out = 0;  
         }
         
         token = strtok_r(NULL, " \t\n", &saveptr);
@@ -97,7 +96,6 @@ int execute_internal_command(char **args) {
     // Comando cd
     if (strcmp(args[0], "cd") == 0) {
         if (!args[1]) {
-            // Si no hay argumentos, ir al directorio HOME
             if (chdir(getenv("HOME")) != 0) {
                 perror("cd HOME");
             }
@@ -106,10 +104,10 @@ int execute_internal_command(char **args) {
                 perror("cd");
             }
         }
-        return 1; // Comando interno ejecutado
+        return 1; 
     }
     
-    return 0; // No es un comando interno
+    return 0; 
 }
 
 // Libera memoria utilizada por la estructura de redirección
@@ -118,7 +116,6 @@ void free_redirection(RedirectionInfo *redirection) {
     if (redirection->input_file) free(redirection->input_file);
     if (redirection->output_file) free(redirection->output_file);
     
-    // Resetear la estructura
     redirection->input_file = NULL;
     redirection->output_file = NULL;
     redirection->append_output = 0;
@@ -137,7 +134,6 @@ void free_args(char **args) {
 void setup_redirections(RedirectionInfo *redirection) {
     if (!redirection) return;
     
-    // Redirección de entrada
     if (redirection->input_file) {
         int fd = open(redirection->input_file, O_RDONLY);
         if (fd == -1) {
@@ -152,7 +148,6 @@ void setup_redirections(RedirectionInfo *redirection) {
         close(fd);
     }
     
-    // Redirección de salida
     if (redirection->output_file) {
         int flags = O_WRONLY | O_CREAT;
         if (redirection->append_output) {
@@ -190,10 +185,9 @@ int execute_command(char **args, RedirectionInfo *redirection) {
     }
 
     if (pid == 0) { // Proceso hijo
-        // Configurar redirecciones
+
         setup_redirections(redirection);
         
-        // Ejecutar el comando
         execvp(args[0], args);
         perror("Error en execvp");
         exit(EXIT_FAILURE);
@@ -213,7 +207,6 @@ int execute_pipeline(char **commands, int num_commands) {
         char *args[MAX_ARGS];
         RedirectionInfo redirection = {NULL, NULL, 0};
         
-        // Parsear comando y detectar redirecciones
         parse_command(commands[0], args, 0, &redirection);
         if (!args[0]) {
             free_redirection(&redirection);
@@ -237,7 +230,6 @@ int execute_pipeline(char **commands, int num_commands) {
     int pipes[num_commands - 1][2];
     pid_t pids[num_commands];
 
-    // Crear todos los pipes necesarios
     for (int i = 0; i < num_commands - 1; i++) {
         if (pipe(pipes[i]) == -1) {
             perror("Error creando pipe");
@@ -249,13 +241,11 @@ int execute_pipeline(char **commands, int num_commands) {
         }
     }
 
-    // Crear procesos para cada comando
     for (int i = 0; i < num_commands; i++) {
         pids[i] = fork();
         
         if (pids[i] == -1) {
             perror("Error en fork");
-            // Limpiar recursos
             for (int j = 0; j < num_commands - 1; j++) {
                 close(pipes[j][0]);
                 close(pipes[j][1]);
@@ -267,7 +257,7 @@ int execute_pipeline(char **commands, int num_commands) {
             return -1;
         }
 
-        if (pids[i] == 0) { // Proceso hijo
+        if (pids[i] == 0) { 
             // Configurar redirecciones de pipes
             if (i > 0) {
                 if (dup2(pipes[i-1][0], STDIN_FILENO) == -1) {
@@ -289,7 +279,6 @@ int execute_pipeline(char **commands, int num_commands) {
                 close(pipes[j][1]);
             }
             
-            // Parsear y configurar redirecciones para este comando
             char *args[MAX_ARGS];
             RedirectionInfo redirection = {NULL, NULL, 0};
             
@@ -324,7 +313,6 @@ int execute_pipeline(char **commands, int num_commands) {
                 }
             }
             
-            // Ejecutar comando
             execvp(args[0], args);
             perror("Error en execvp");
             
@@ -335,13 +323,11 @@ int execute_pipeline(char **commands, int num_commands) {
         }
     }
 
-    // Proceso padre: cerrar todos los pipes
     for (int i = 0; i < num_commands - 1; i++) {
         close(pipes[i][0]);
         close(pipes[i][1]);
     }
 
-    // Esperar a que terminen todos los hijos
     for (int i = 0; i < num_commands; i++) {
         waitpid(pids[i], NULL, 0);
     }
@@ -408,10 +394,8 @@ int main() {
             continue;
         }
         
-        // Ejecutar el pipeline de comandos
         execute_pipeline(commands, command_count);
         
-        // Liberar memoria
         for (int i = 0; i < command_count; i++) {
             free(commands[i]);
         }

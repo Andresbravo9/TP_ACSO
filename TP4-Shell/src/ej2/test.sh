@@ -3,7 +3,7 @@
 # Colores para la salida
 GREEN='\033[0;32m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+NC='\033[0m' 
 
 # Función para ejecutar una prueba
 run_test() {
@@ -32,10 +32,8 @@ run_test() {
     # Ejecutar el mismo comando en bash real
     bash -c "${command}" > "$bash_output" 2> "$bash_error" || true
     
-    # Filtrar la salida del shell personalizado para quitar "Shell> " y "Shell> Saliendo del shell..."
     cat "$custom_output" | grep -v "Saliendo del shell" | sed 's/^Shell> //g' > "$custom_output_filtered"
     
-    # Mostrar las salidas para depuración
     echo "Salida de tu shell (original):"
     cat "$custom_output"
     echo "Salida de tu shell (filtrada):"
@@ -45,7 +43,6 @@ run_test() {
     
     # Verificar si las salidas coinciden
     if [ "$expect_error" = true ]; then
-        # Para errores, solo verificamos si ambos shells reportaron algún error
         if [ -s "$custom_error" ] && [ -s "$bash_error" ]; then
             echo -e "${GREEN}✓ Prueba exitosa - Ambos shells reportaron errores${NC}"
             echo "Error en bash:"
@@ -60,7 +57,6 @@ run_test() {
             cat "$custom_error"
         fi
     else
-        # Comparar salidas estándar (usando la salida filtrada)
         if diff -q "$custom_output_filtered" "$bash_output" >/dev/null; then
             echo -e "${GREEN}✓ Prueba exitosa - Las salidas coinciden exactamente${NC}"
         else
