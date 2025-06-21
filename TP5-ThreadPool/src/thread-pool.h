@@ -14,10 +14,13 @@
 #include <functional>  // for the function template used in the schedule signature
 #include <thread>      // for thread
 #include <vector>      // for vector
+#include <queue>       // for queue
+#include <atomic>      // for atomic
+#include <mutex>       // for mutex
+#include <condition_variable> // for condition_variable
 #include "Semaphore.h" // for Semaphore
 
 using namespace std;
-
 
 /**
  * @brief Represents a worker in the thread pool.
@@ -29,11 +32,11 @@ using namespace std;
  * worker to process.
  */
 typedef struct worker {
-    thread ts;
-    function<void(void)> thunk;
-    /**
-     * Complete the definition of the worker_t struct here...
-     **/
+    thread ts;                     // Thread handle
+    function<void(void)> thunk;    // Current task to execute
+    bool available;                // Indicates if worker is available
+    Semaphore* workReady;          // Signals when work is ready for this specific worker
+    mutex workerMutex;             // Protects worker state
 } worker_t;
 
 class ThreadPool {
@@ -67,17 +70,26 @@ class ThreadPool {
     ~ThreadPool();
     
   private:
-
     void worker(int id);
     void dispatcher();
-    thread dt;                              // dispatcher thread handle
-    vector<worker_t> wts;                   // worker thread handles. you may want to change/remove this
-    bool done;                              // flag to indicate the pool is being destroyed
-    mutex queueLock;                        // mutex to protect the queue of tasks
 
-    /* It is incomplete, there should be more private variables to manage the structures... 
-    * *
-    */
+    // Threads
+    thread dt;
+    vector<worker_t> wts;
+    atomic<bool> done;
+
+    // Task queue management
+    queue<function<void(void)>> taskQueue;
+    mutex queueLock;
+    Semaphore tasksInQueue;
+
+    // Worker coordination
+    Semaphore availableWorkers;
+
+    // Wait/completion management
+    size_t pending_tasks;
+    mutex wait_mutex;
+    condition_variable wait_cond;
   
     /* ThreadPools are the type of thing that shouldn't be cloneable, since it's
     * not clear what it means to clone a ThreadPool (should copies of all outstanding
@@ -89,4 +101,5 @@ class ThreadPool {
     ThreadPool(const ThreadPool& original) = delete;
     ThreadPool& operator=(const ThreadPool& rhs) = delete;
 };
+
 #endif
