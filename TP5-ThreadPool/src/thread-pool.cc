@@ -25,6 +25,9 @@ ThreadPool::ThreadPool(size_t numThreads)
 }
 
 void ThreadPool::schedule(const function<void(void)>& thunk) {
+    if (done) {
+        throw logic_error("El ThreadPool ha sido cerrado.");
+    }
     {
         lock_guard<mutex> lock(wait_mutex);
         pending_tasks++;
